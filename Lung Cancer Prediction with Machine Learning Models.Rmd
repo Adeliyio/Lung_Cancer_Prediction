@@ -1,0 +1,317 @@
+---
+title: 'Lung Cancer Prediction with Machine Learning Models'
+author: "ADELIYI OLUTOMIWA"
+output: 
+    html_document:
+        toc: true
+        toc_float: true
+        theme: sandstone
+---
+<style>
+body {
+text-align: justify}
+</style>
+
+
+
+# INTRODUCTION
+
+Lung cancer is a significant health concern worldwide, and early detection and accurate prediction of the disease can significantly impact patient outcomes. In this report, we explore the use of different machine learning models to predict the occurrence of lung cancer based on various factors and symptoms.
+
+The dataset used in this analysis contains information from 309 individuals, including their gender, age, smoking status, and several other categorical features related to symptoms and health conditions. The target variable is "LUNG_CANCER," which indicates whether an individual has lung cancer or not.
+
+
+# EDA
+
+To gain insights into the relationship between different variables and the occurrence of lung cancer, we used the `summary` function to assess the relationship among variables and also used bar plots to understand some of the relationships..
+
+```{r setup, include=TRUE, warning = FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+# Load the necessary libraries
+library(caTools)
+library(randomForest)
+library(rpart)
+library(rpart.plot)
+library(e1071)
+library(caret)
+library(ggplot2)
+library(caret)
+
+# Load the dataset
+pd <- read.csv("survey lung cancer.csv")
+
+# Handling missing values (if any)
+if (sum(is.na(pd)) > 0) {
+  pd <- na.omit(pd) # Remove rows with NAs if present
+}
+str(pd)
+
+
+
+
+
+
+summary(pd)
+```
+
+
+
+
+```{r fig.width = 10, fig.height = 6, warning = FALSE}
+
+# Function to create a bar plot for each categorical variable
+create_bar_plot <- function(data, x_var, target_var) {
+  p <- ggplot(data, aes_string(x = x_var, fill = target_var)) +
+    geom_bar(position = "dodge") +
+    labs(title = paste("Bar Plot of", x_var, "vs. LUNG_CANCER"),
+         x = x_var, y = "Count") +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  
+  return(p)
+}
+
+# Create individual bar plots for each categorical variable
+for (col in names(pd)) {
+  if (is.factor(pd[[col]]) && col != "LUNG_CANCER") {
+    p <- create_bar_plot(pd, col, "LUNG_CANCER")
+    print(p)
+  }
+}
+
+```
+
+***GENDER:***
+
+The dataset includes information on the gender of the individuals. The gender variable is stored as a character class.
+
+***AGE:***
+
+The age of the individuals ranges from 21 to 87, with a mean age of approximately 62.67. The median age is 62, indicating that the data is roughly symmetrically distributed.
+
+***SMOKING:***
+
+This variable represents smoking status, where 1 indicates "smoking" and 2 indicates "non-smoking." The mean value of 1.563 suggests that the majority of individuals in the dataset are non-smokers.
+
+***YELLOW_FINGERS:***
+
+Yellow fingers status is represented by 1 for "present" and 2 for "absent." The mean value of 1.57 indicates that, on average, more individuals have yellow fingers.
+
+***ANXIETY:***
+
+The variable represents the presence (1) or absence (2) of anxiety. The mean value of 1.498 indicates that, on average, anxiety is relatively prevalent in the dataset.
+
+***PEER_PRESSURE:***
+
+This variable represents whether individuals experienced peer pressure (1) or not (2). The mean value of 1.502 indicates that, on average, there is some level of peer pressure experienced by individuals.
+
+***CHRONIC.DISEASE:***
+
+The presence (1) or absence (2) of chronic disease is captured by this variable. The mean value of 1.505 suggests that, on average, some individuals in the dataset have chronic diseases.
+
+***FATIGUE:***
+
+Fatigue status is represented by 1 for "present" and 2 for "absent." The mean value of 1.673 indicates that, on average, more individuals experience fatigue.
+
+***ALLERGY:*** 
+
+The variable indicates the presence (1) or absence (2) of allergies. The mean value of 1.557 suggests that, on average, allergies are relatively prevalent.
+
+***WHEEZING:***
+
+Wheezing status is represented by 1 for "present" and 2 for "absent." The mean value of 1.557 indicates that, on average, wheezing is somewhat prevalent.
+
+***ALCOHOL.CONSUMING:*** 
+
+This variable represents alcohol consumption, where 1 indicates "consuming" and 2 indicates "non-consuming." The mean value of 1.557 suggests that, on average, the majority of individuals do not consume alcohol.
+
+***COUGHING:***
+
+The variable indicates coughing status, with 1 representing "present" and 2 representing "absent." The mean value of 1.579 suggests that, on average, coughing is somewhat prevalent.
+
+***SHORTNESS.OF.BREATH:*** 
+
+This variable represents shortness of breath status, where 1 indicates "present" and 2 indicates "absent." The mean value of 1.641 suggests that, on average, shortness of breath is somewhat prevalent.
+
+***SWALLOWING.DIFFICULTY:*** 
+
+Swallowing difficulty status is represented by 1 for "present" and 2 for "absent." The mean value of 1.469 indicates that, on average, swallowing difficulty is somewhat prevalent.
+
+***CHEST.PAIN:***
+
+The variable indicates chest pain status, with 1 representing "present" and 2 representing "absent." The mean value of 1.557 suggests that, on average, chest pain is somewhat prevalent.
+
+***LUNG_CANCER:***
+
+The target variable represents the presence ("YES") or absence ("NO") of lung cancer. The data is stored as a character class.
+
+# MODEL EVALUATION
+
+We employed four different machine learning models for lung cancer prediction:
+
++ Logistic Regression
++ Decision Trees
++ Random Forest
++ Support Vector Machines (SVM)
+
+
+### MODEL EVALUATION METRICS
+
+To evaluate the performance of each model, we calculated the following metrics:
+
++ ***Accuracy:***
+
+The overall accuracy of the model in predicting lung cancer cases correctly.
+
++ ***Precision:***
+
+The proportion of true positive predictions out of all positive predictions made by the model.
+
++ ***Recall:*** 
+
+The proportion of true positive predictions out of all actual positive cases in the test data.
+
++ ***F1-Score:***
+
+The harmonic mean of precision and recall, providing a balanced measure between the two.
+
+
+
+```{r fig.width = 10, fig.height = 6, warning = FALSE}
+
+
+# Split the data into training and testing sets
+set.seed(4325) # Set seed for reproducibility
+split <- sample.split(pd$LUNG_CANCER, SplitRatio = 0.7) 
+train_data <- subset(pd, split == TRUE)
+test_data <- subset(pd, split == FALSE)
+
+#  Convert "YES" and "NO" to binary (0 and 1) for logistic regression
+train_data$LUNG_CANCER <- ifelse(train_data$LUNG_CANCER == "YES", 1, 0)
+test_data$LUNG_CANCER <- ifelse(test_data$LUNG_CANCER == "YES", 1, 0)
+
+# Train and Evaluate Models for Lung Cancer Prediction
+# Model 1: Logistic Regression
+model_logistic <- glm(LUNG_CANCER ~ ., data = train_data, family = binomial)
+logistic_predictions <- predict(model_logistic, newdata = test_data, type = "response")
+
+# Convert the predicted probabilities to binary (0 and 1) based on a threshold (e.g., 0.5)
+logistic_predictions <- ifelse(logistic_predictions >= 0.5, 1, 0)
+
+# Convert both predicted and actual values to factors with the same levels (0 and 1)
+logistic_predictions <- factor(logistic_predictions, levels = c(0, 1))
+test_data$LUNG_CANCER <- factor(test_data$LUNG_CANCER, levels = c(0, 1))
+
+# Model 2: Decision Trees
+model_decision_tree <- rpart(LUNG_CANCER ~ ., data = train_data, method = "class")
+decision_tree_predictions <- predict(model_decision_tree, newdata = test_data, type = "class")
+
+
+# Convert target variable back to factor format
+train_data$LUNG_CANCER <- factor(train_data$LUNG_CANCER, levels = c(0, 1))
+test_data$LUNG_CANCER <- factor(test_data$LUNG_CANCER, levels = c(0, 1))
+
+# Model 3: Random Forest
+model_random_forest <- randomForest(LUNG_CANCER ~ ., data = train_data, ntree = 100)
+random_forest_predictions <- predict(model_random_forest, newdata = test_data)
+
+
+# Set factor levels explicitly for both predicted and actual values
+levels_rf <- levels(random_forest_predictions)
+levels_actual <- levels(test_data$LUNG_CANCER)
+random_forest_predictions <- factor(random_forest_predictions, levels = levels_actual)
+
+# Model 4: Support Vector Machines (SVM)
+model_svm <- svm(LUNG_CANCER ~ ., data = train_data)
+svm_predictions <- predict(model_svm, newdata = test_data)
+
+# Set factor levels explicitly for both predicted and actual values
+svm_predictions <- factor(svm_predictions, levels = levels_actual)
+
+#  Evaluation of Models
+
+# Function to calculate and print evaluation metrics
+calculate_metrics <- function(predictions, actual) {
+  confusion <- confusionMatrix(predictions, actual)
+  accuracy <- confusion$overall["Accuracy"]
+  precision <- confusion$byClass["Pos Pred Value"]
+  recall <- confusion$byClass["Sensitivity"]
+  f1_score <- confusion$byClass["F1"]
+  
+  cat("Accuracy:", round(accuracy, 2), "\n")
+  cat("Precision:", round(precision, 2), "\n")
+  cat("Recall:", round(recall, 2), "\n")
+  cat("F1-Score:", round(f1_score, 2), "\n")
+}
+
+# Evaluate Logistic Regression Model
+cat("Logistic Regression Model:\n")
+calculate_metrics(logistic_predictions, test_data$LUNG_CANCER)
+
+# Evaluate Decision Tree Model
+cat("Decision Tree Model:\n")
+calculate_metrics(decision_tree_predictions, test_data$LUNG_CANCER)
+# Plot the Decision Tree
+rpart.plot(model_decision_tree, box.palette = "RdBu", shadow.col = "gray", nn = TRUE)
+
+# Evaluate Random Forest Model
+cat("Random Forest Model:\n")
+calculate_metrics(random_forest_predictions, test_data$LUNG_CANCER)
+
+# Evaluate SVM Model
+cat("Support Vector Machines (SVM) Model:\n")
+calculate_metrics(svm_predictions, test_data$LUNG_CANCER)
+```
+
+# RESULTS
+
+The evaluation metrics for each model are as follows:
+
+***Logistic Regression Model:***
+
++ Accuracy: 0.94
++ Precision: 0.75
++ Recall: 0.75
++ F1-Score: 0.75
+
+***Decision Tree Model:***
+
++ Accuracy: 0.90
++ Precision: 0.71
++ Recall: 0.42
++ F1-Score: 0.53
+
+***Random Forest Model:***
+
++ Accuracy: 0.96
++ Precision: 0.83
++ Recall: 0.83
++ F1-Score: 0.83
+
+***Support Vector Machines (SVM) Model:***
+
++ Accuracy: 0.94
++ Precision: 0.75
++ Recall: 0.75
++ F1-Score: 0.75
+
+# CONCLUSION
+
+Based on the evaluation metrics, the Random Forest model achieved the highest accuracy, precision, recall, and F1-Score, making it the most effective model for predicting lung cancer in this dataset.
+
+#REFERENCES
+
+data_source <- https://www.kaggle.com/datasets/mysarahmadbhat/lung-cancer
+
+Kuhn, M. (2020). caret: Classification and Regression Training. R package version 6.0-86. https://CRAN.R-project.org/package=caret
+
+Robin, X., Turck, N., Hainard, A., Tiberti, N., Lisacek, F., Sanchez, J.-C., & Muller, M. (2011). pROC: an open-source package for R and S+ to analyze and compare ROC curves. BMC Bioinformatics, 12(1), 77.
+
+Chen, T., & Guestrin, C. (2016). XGBoost: A Scalable Tree Boosting System. Proceedings of the 22nd ACM SIGKDD International Conference on Knowledge Discovery and Data Mining, 785-794.
+
+Breiman, L. (2001). Random forests. Machine Learning, 45(1), 5-32.
+Healy, K. (2018). Data Visualization: A Practical Introduction. Princeton University Press. Retrieved from 
+
+Wickham, H., & Grolemund, G. (2017). R for Data Science: Import, Tidy, Transform, Visualize, and Model Data. O'Reilly Media.
+
+Wilke, C. O. (2019). Fundamentals of Data Visualization: A Primer on Making Informative and Compelling Figures. O'Reilly Media.
